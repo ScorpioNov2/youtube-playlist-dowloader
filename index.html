@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Batch ZIP Downloader</title>
+    <!-- JSZip Library for client-side compression -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f4f7f6; padding: 20px; color: #333; }
+        .container { max-width: 800px; margin: auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        h2 { color: #ff0000; text-align: center; margin-bottom: 5px; }
+        .subtitle { text-align: center; color: #666; font-size: 14px; margin-bottom: 25px; }
+        label { font-weight: bold; display: block; margin-top: 15px; margin-bottom: 5px; color: #444; }
+        .row { display: flex; gap: 15px; }
+        .col { flex: 1; }
+        select, input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 15px; background: #fff; box-sizing: border-box; }
+        textarea { width: 100%; height: 150px; border: 1px solid #ccc; border-radius: 4px; padding: 10px; box-sizing: border-box; font-family: monospace; resize: vertical; }
+        button { background: #ff0000; color: white; border: none; padding: 14px 20px; font-size: 16px; border-radius: 4px; cursor: pointer; width: 100%; margin-top: 25px; font-weight: bold; transition: background 0.2s; }
+        button:hover { background: #cc0000; }
+        button:disabled { background: #ccc !important; cursor: not-allowed; }
+        #status-container { margin-top: 25px; border-top: 2px solid #eee; padding-top: 15px; }
+        .batch-header { background: #34495e; color: white; padding: 8px 12px; margin-top: 15px; border-radius: 4px; font-weight: bold; font-size: 14px; }
+        .video-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #eee; font-size: 13px; background: #fafafa; }
+        .status { font-weight: bold; padding: 3px 6px; border-radius: 4px; font-size: 12px; }
+        .status.waiting { color: #777; background: #eee; }
+        .status.loading { color: #d35400; background: #fdebd0; }
+        .status.success { color: #27ae60; background: #d4efdf; }
+        .status.error { color: #c0392b; background: #f9ebd2; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>📥 YouTube Batch ZIP Downloader</h2>
+    <div class="subtitle">Paste scraped JSON Array • Automated Batch Multi-ZIP Generation</div>
+    
+    <label for="json-input">1. Paste Scraped Video JSON Array:</label>
+    <textarea id="json-input" placeholder='[\n  {\n    "title": "Video Title",\n    "url": "https://youtube.com/watch?v=..."\n  }\n]'></textarea>
+    
+    <div class="row">
+        <div class="col">
+            <label for="quality-select">2. Select Quality:</label>
+            <select id="quality-select">
+                <option value="1080">1080p Full HD</option>
+                <option value="720" selected>720p HD</option>
+                <option value="540">540p</option>
+                <option value="audio">Audio Only (MP3)</option>
+            </select>
+        </div>
+        <div class="col">
+            <label for="batch-size">3. Batch Size:</label>
+            <input type="number" id="batch-size" value="10" min="1" max="50">
+        </div>
+    </div>
+
+    <label for="zip-name">4. ZIP File Prefix Name:</label>
+    <input type="text" id="zip-name" value="youtube_batch" placeholder="e.g., my_playlist">
+
+    <button id="start-btn" onclick="startBulkDownload()">START BATCH DOWNLOAD</button>
+
+    <div id="status-container"></div>
+</div>
+
+<script>
+function sanitizeFilename(filename) {
+    return filename.replace(/[\\/:*?"<>|]/g, '_');
+}
+
+async function startBulkDownload() {
+    const inputData = document.getElementById('json-input').value.trim();
+    const qualitySelect = document.getElementById('quality-select').value;
+    const batchSize = parseInt(document.getElementById('batch-size').value) || 10;
+    const zipNameInput = document.getElementById('zip-name').value.trim() || 'youtube_batch';
+    const statusContainer = document.getElementById('status-container');
+    const startBtn = document.getElementById('start-btn');
+    
+    if (!inputData) return alert('Please paste your video JSON array first!');
+
+    let videoList = [];
+    try {
+        videoList = JSON.parse(inputData);
+    } catch (e) {
+        return alert('Invalid JSON structure! Please make sure it is a properly closed array format [ ... ].');
+    }
+
+    if (!Array.isArray(videoList) || videoList.length === 0) {
+        return alert('The parsed input is not a valid JSON array or it is empty.');
+    }
+
+    // Lock UI controls during processing
+    startBtn.disabled = true;
+    document.getElementById('json-input').disabled = true;
+    document.getElementById('quality-select').disabled = true;
+    document.getElementById('batch-size').disabled = true;
+    document.getElementById('zip-name').disabled = true;
+    
+    statusContainer.innerHTML = `<h3>📊 System Logs (Processing ${videoList.length} items):</h3>`;
+
+    const totalVideos = videoList.length;
+    let videoIndex = 0;
+    let batchIndex = 1;
+
+    // Main sequential processing loop chunking by configured Batch Size
+    while (videoIndex < totalVideos) {
+        const currentBatchVideos = videoList.slice(videoIndex, videoIndex + batchSize);
+        
+        const batchHeader = document.createElement('div');
+        batchHeader.className = 'batch-header';
+        batchHeader.innerText = `📦 BATCH #${batchIndex} (Processing ${currentBatchVideos.length} items from ${videoIndex + 1} to ${Math.min(videoIndex + batchSize, totalVideos)})`;
+        statusContainer.appendChild(batchHeader);
+
+        const zip = new JSZip();
+        let successCountInBatch = 0;
+
+        for (let i = 0; i < currentBatchVideos.length; i++) {
+            const video = currentBatchVideos[i];
+            const globalId = videoIndex + i;
+
+            const item = document.createElement('div');
+            item.className = 'video-item';
+            item.innerHTML = `
+                <span>🔹 [${globalId + 1}/${totalVideos}] <b>${video.title || 'Untitled Video'}</b></span>
+                <span class="status loading" id="status-${globalId}">Connecting...</span>
+            `;
+            statusContainer.appendChild(item);
+            const statusText = document.getElementById(`status-${globalId}`);
+
+            try {
+                if (!video.url) throw new Error('Missing URL reference.');
+
+                const isAudioOnly = qualitySelect === 'audio';
+                const requestBody = { url: video.url, filenamePattern: 'classic' };
+                if (isAudioOnly) requestBody.downloadMode = 'audio';
+                else requestBody.videoQuality = qualitySelect;
+
+                // Send request parameters to public Cobalt Engine architecture
+                const response = await fetch('https://cobalt.tools', {
+                    method: 'POST',
+                    headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+                    body: JSON.stringify(requestBody)
+                });
+                const result = await response.json();
+
+                if (result.status === 'stream' || result.status === 'redirect') {
+                    statusText.innerText = 'Buffering...';
+
+                    // Stream media asset contents down to virtual heap buffer block
+                    const fileResponse = await fetch(result.url);
+                    const fileBlob = await fileResponse.blob();
+
+                    const ext = isAudioOnly ? '.mp3' : '.mp4';
+                    const safeTitle = sanitizeFilename(video.title || `video_${globalId}`) + ext;
+
+                    // Append raw media asset blob straight to current batch stack
+                    zip.file(safeTitle, fileBlob);
+
+                    statusText.innerText = 'Added to ZIP!';
+                    statusText.className = 'status success';
+                    successCountInBatch++;
+                } else {
+                    throw new Error();
+                }
+            } catch (err) {
+                statusText.innerText = 'Skipped (Error)!';
+                statusText.className = 'status error';
+            }
+
+            // Firewall delay to prevent sudden request bursts
+            await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+
+        // Bundle and output current batch index file package
+        if (successCountInBatch > 0) {
+            const notice = document.createElement('div');
+            notice.style.padding = '8px';
+            notice.style.fontSize = '13px';
+            notice.style.background = '#e8f8f5';
+            notice.innerText = `⚙️ Building ZIP Package for Batch #${batchIndex}... Please wait.`;
+            statusContainer.appendChild(notice);
+
+            const content = await zip.generateAsync({ type: "blob" });
+            
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(content);
+            a.download = `${zipNameInput}_part${batchIndex}.zip`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+
+            notice.innerHTML = `💾 Triggered download for: <b>${zipNameInput}_part${batchIndex}.zip</b>`;
+        }
+
+        videoIndex += batchSize;
+        batchIndex++;
+        
+        // Brief interval cooldown allowing garbage collector to scrub physical RAM load
+        await new Promise(resolve => setTimeout(resolve, 3000));
+    }
+
+    // Restore interactable status controls back to baseline fields
+    startBtn.disabled = false;
+    document.getElementById('json-input').disabled = false;
+    document.getElementById('quality-select').disabled = false;
+    document.getElementById('batch-size').disabled = false;
+document.getElementById('zip-name').disabled = false;
+alert('🎉 All batches processed and downloaded successfully!');
+}
+</script>
+
+</body>
+</html>
