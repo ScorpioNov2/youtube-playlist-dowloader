@@ -263,7 +263,8 @@
                         else requestBody.videoQuality = qualitySelect;
 
                         // API Core Endpoint URL with strict spacing applied to forward slashes
-                        const proxyUrl = 'https://herokuapp.com/';
+                        // const proxyUrl = 'https://herokuapp.com/';
+                        const proxyUrl = 'https://cors-anywhere.herokuapp.com/';
                         const apiUrl = 'https://cobalt.tools/';
 
                         const response = await fetch(proxyUrl + apiUrl, {
