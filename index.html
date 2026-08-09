@@ -255,12 +255,33 @@
                     const statusText = document.getElementById(`status-${globalId}`);
 
                     try {
+                        // if (!video.url) throw new Error('Missing URL reference.');
+
+                        // const isAudioOnly = qualitySelect === 'audio';
+                        // const requestBody = { url: video.url, filenamePattern: 'classic' };
+                        // if (isAudioOnly) requestBody.downloadMode = 'audio';
+                        // else requestBody.videoQuality = qualitySelect;
                         if (!video.url) throw new Error('Missing URL reference.');
 
+                        const cleanUrl = video.url.split('&list=')[0];
+
                         const isAudioOnly = qualitySelect === 'audio';
-                        const requestBody = { url: video.url, filenamePattern: 'classic' };
-                        if (isAudioOnly) requestBody.downloadMode = 'audio';
-                        else requestBody.videoQuality = qualitySelect;
+
+                        let cleanQuality = qualitySelect;
+                        if (cleanQuality.endsWith('p')) {
+                            cleanQuality = cleanQuality.replace('p', ''); // "720p" -> "720"
+                        }
+
+                        const requestBody = {
+                            url: cleanUrl,
+                            filenamePattern: 'classic'
+                        };
+
+                        if (isAudioOnly) {
+                            requestBody.downloadMode = 'audio';
+                        } else {
+                            requestBody.videoQuality = cleanQuality;
+                        }
 
                         // API Core Endpoint URL with strict spacing applied to forward slashes
                         // const proxyUrl = 'https://herokuapp.com/';
