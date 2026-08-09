@@ -162,7 +162,7 @@
 
         <label for="json-input">1. Paste Scraped Video JSON Array:</label>
         <textarea id="json-input"
-            placeholder='[\n  {\n    "title": "Video Title",\n    "url": "https://youtube.com/watch?v=..."\n  }\n]'></textarea>
+            placeholder='[{ "title": "Video Title", "url": "https://youtube.com/watch?v=..." }]'></textarea>
 
         <div class="row">
             <div class="col">
@@ -264,7 +264,7 @@
 
                         // API Core Endpoint URL with strict spacing applied to forward slashes
                         const proxyUrl = 'https://herokuapp.com/';
-                        const apiUrl = 'https://cobalt.tools';
+                        const apiUrl = 'https://cobalt.tools/';
 
                         const response = await fetch(proxyUrl + apiUrl, {
                             method: 'POST',
